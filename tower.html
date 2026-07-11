@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Stack Tower Master</title>
+    <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background: #0f172a;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        /* Custom smooth transition for UI */
+        .ui-transition {
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden select-none">
+
+    <!-- Canvas for 3D Game -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Overlay UI (Z-Index: 10) -->
+    <div class="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none p-6 md:p-8">
+        
+        <!-- Top bar (Score & Sound Toggle) -->
+        <div class="flex justify-between items-center w-full pointer-events-auto">
+            <!-- Score display -->
+            <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg">
+                <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase">Skor</span>
+                <span id="scoreText" class="text-2xl font-black text-white">0</span>
+            </div>
+            
+            <!-- High Score and Sound -->
+            <div class="flex items-center gap-3">
+                <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg">
+                    <span class="text-xs font-semibold text-amber-400 tracking-wider uppercase"><i class="fa-solid fa-crown mr-1"></i> Terbaik</span>
+                    <span id="highScoreText" class="text-2xl font-black text-amber-400">0</span>
+                </div>
+                <button id="soundBtn" class="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700/50 text-white rounded-2xl p-4 shadow-lg active:scale-95 transition-all">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Notification (e.g. "PERFECT!") -->
+        <div class="flex justify-center items-center flex-grow pointer-events-none">
+            <div id="comboText" class="text-4xl md:text-6xl font-black text-white uppercase tracking-widest opacity-0 scale-50 transition-all duration-300 select-none drop-shadow-[0_5px_15px_rgba(255,255,255,0.4)]">
+                Perfect!
+            </div>
+        </div>
+
+        <!-- Bottom Tip -->
+        <div class="flex justify-center w-full mb-2">
+            <p id="gameTip" class="text-xs md:text-sm font-semibold text-slate-400 bg-slate-900/60 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-800/50 text-center animate-pulse">
+                Tekan [ SPASI ] atau TAP Layar untuk menumpuk balok
+            </p>
+        </div>
+    </div>
+
+    <!-- Start Game Modal Screen -->
+    <div id="startScreen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md p-6 text-center ui-transition">
+        <div class="max-w-md w-full flex flex-col items-center">
+            <!-- Game Title with colorful aesthetic -->
+            <div class="relative mb-6">
+                <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-pink-500 blur opacity-40 animate-pulse"></div>
+                <div class="relative bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl">
+                    <span class="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Game Arcade 3D</span>
+                    <h1 class="text-4xl font-extrabold text-white tracking-tight leading-none mb-2">TOWER <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-400 to-pink-400">STACKER</span></h1>
+                    <p class="text-slate-400 text-xs">Uji ketepatan waktumu dalam menyusun menara tertinggi!</p>
+                </div>
+            </div>
+
+            <!-- Shape Selector -->
+            <div class="w-full mb-4 pointer-events-auto">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Pilih Bentuk Balok</label>
+                <div class="grid grid-cols-2 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+                    <button id="shapeBoxBtn" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 shadow-md">
+                        <i class="fa-solid fa-cube mr-1"></i> KOTAK
+                    </button>
+                    <button id="shapeCylinderBtn" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-circle mr-1"></i> BULAT
+                    </button>
+                </div>
+            </div>
+
+            <!-- Difficulty Selector -->
+            <div class="w-full mb-6 pointer-events-auto">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Pilih Tingkat Kesulitan</label>
+                <div class="grid grid-cols-3 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+                    <button id="easyBtn" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white">MUDAH</button>
+                    <button id="mediumBtn" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 shadow-md">SEDANG</button>
+                    <button id="hardBtn" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white">SULIT</button>
+                </div>
+            </div>
+
+            <!-- Play Button with Gradient Hover -->
+            <button id="startBtn" class="group relative px-8 py-4 w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 active:scale-95">
+                <span class="absolute inset-0 bg-gradient-to-r from-cyan-500 via-indigo-500 to-pink-500 transition-all duration-300 group-hover:opacity-90"></span>
+                <span class="relative flex items-center justify-center gap-3 text-white font-extrabold text-lg tracking-wider">
+                    <i class="fa-solid fa-play animate-bounce"></i> MULAI BERMAIN
+                </span>
+            </button>
+
+            <!-- Instructions -->
+            <div class="mt-6 grid grid-cols-3 gap-3 text-center w-full">
+                <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
+                    <i class="fa-solid fa-hand-pointer text-cyan-400 text-lg mb-1"></i>
+                    <p class="text-[10px] text-slate-400">Tap / Spasi</p>
+                    <p class="text-xs font-bold text-white mt-1">Kontrol Mudah</p>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
+                    <i class="fa-solid fa-arrows-split-up-and-left text-indigo-400 text-lg mb-1"></i>
+                    <p class="text-[10px] text-slate-400">Presisi</p>
+                    <p class="text-xs font-bold text-white mt-1">Potong Balok</p>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
+                    <i class="fa-solid fa-music text-pink-400 text-lg mb-1"></i>
+                    <p class="text-[10px] text-slate-400">Combo</p>
+                    <p class="text-xs font-bold text-white mt-1">Ketukan Nada</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal Screen -->
+    <div id="gameOverScreen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md p-6 text-center ui-transition hidden opacity-0 scale-95">
+        <div class="max-w-sm w-full bg-slate-900/90 border border-slate-800 p-8 rounded-3xl shadow-2xl flex flex-col items-center">
+            <!-- Icon Crown / Trophy -->
+            <div class="w-16 h-16 bg-red-500/10 border border-red-500/30 text-red-500 rounded-full flex items-center justify-center text-2xl mb-4">
+                <i class="fa-solid fa-skull-crossbones"></i>
+            </div>
+
+            <h2 class="text-2xl font-black text-white mb-2">YAH, JATUH!</h2>
+            <p class="text-slate-400 text-sm mb-6">Menaramu terlalu miring dan runtuh ke tanah.</p>
+
+            <!-- Final Score Stats -->
+            <div class="grid grid-cols-2 gap-4 w-full mb-6">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Skor Kamu</p>
+                    <p id="finalScore" class="text-3xl font-black text-white mt-1">0</p>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Terbaik</p>
+                    <p id="finalHighScore" class="text-3xl font-black text-amber-400 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-3 w-full">
+                <button id="restartBtn" class="flex items-center justify-center gap-3 w-full bg-white hover:bg-slate-100 text-slate-950 font-extrabold py-4 px-6 rounded-2xl shadow-lg active:scale-95 transition-all">
+                    <i class="fa-solid fa-rotate-right"></i> MAIN LAGI
+                </button>
+                <button id="homeBtn" class="flex items-center justify-center gap-3 w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 px-6 rounded-2xl border border-slate-700 shadow-md active:scale-95 transition-all">
+                    <i class="fa-solid fa-house"></i> MENU UTAMA
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* WEB AUDIO SYSTEM (Sound Synthesizer) */
+        class SoundSynth {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                // Pentatonic Scale for beautiful harmonized tones on perfect placement
+                this.scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playStackSound(perfectCombo = 0, isPerfect = false) {
+                if (this.muted) return;
+                this.init();
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                // Calculate note frequency based on combo streak
+                const noteIndex = Math.min(perfectCombo, this.scale.length - 1);
+                let freq = this.scale[noteIndex];
+                
+                if (isPerfect) {
+                    osc.type = 'triangle'; // Sweet flute-like sound for perfects
+                    // Play a quick harmonic double-tone
+                    this.playTick(freq * 1.5, 0.05, 0.15);
+                } else {
+                    osc.type = 'sine'; // Warm plonk sound for normal stacks
+                }
+
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            playTick(freq, startVol, duration) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(startVol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            playGameOver() {
+                if (this.muted) return;
+                this.init();
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(60, this.ctx.currentTime + 0.6);
+                
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.6);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.6);
+            }
+        }
+
+        const sound = new SoundSynth();
+
+        // Audio controls UI logic
+        const soundBtn = document.getElementById('soundBtn');
+        const soundIcon = document.getElementById('soundIcon');
+        soundBtn.addEventListener('click', () => {
+            sound.muted = !sound.muted;
+            if (sound.muted) {
+                soundIcon.className = 'fa-solid fa-volume-xmark text-lg text-rose-500';
+            } else {
+                soundIcon.className = 'fa-solid fa-volume-high text-lg';
+                sound.init();
+            }
+        });
+    </script>
+
+    <script>
+        /* GAME MECHANICS CONSTANTS */
+        const ORIGINAL_BOX_SIZE = 3; // base dimensions
+        const BOX_HEIGHT = 0.5;
+        
+        // Difficulty Level Speeds Configuration
+        const SPEED_CONFIG = {
+            easy: { base: 0.07, accel: 0.001 },
+            medium: { base: 0.13, accel: 0.003 },
+            hard: { base: 0.20, accel: 0.006 }
+        };
+        let currentDifficulty = 'medium';
+        let currentShape = 'box'; // 'box' or 'cylinder'
+        
+        let scene, camera, renderer;
+        let stack = [];
+        let debris = []; // Sliced fall off pieces
+        let activeBlock = {};
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('stack_high_score') || '0');
+        let gameStatus = 'START'; // START, PLAYING, GAMEOVER
+        let perfectStreak = 0;
+        let blockIndex = 0; // for color palette progression
+        let PERFECT_THRESHOLD = 0.12; // Sensitivity for perfect fits
+        
+        // Dynamic camera tracking variables
+        let cameraTargetY = 0;
+        let cameraCurrentY = 0;
+
+        // Initialize display scores
+        document.getElementById('highScoreText').innerText = highScore;
+
+        /* INITIALIZATION OF THREE.JS */
+        function init3D() {
+            const canvas = document.getElementById('gameCanvas');
+            
+            // 1. Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('#0f172a'); // Indigo slate background
+            scene.fog = new THREE.FogExp2('#0f172a', 0.04);
+
+            // 2. Camera setup - Isometric feel via Orthographic camera
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = 5;
+            camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, -100, 1000);
+            
+            // Place isometric view angle
+            camera.position.set(6, 6, 6);
+            camera.lookAt(0, 0, 0);
+
+            // 3. Renderer setup
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // 4. Lighting design (Atmospheric lighting & dynamic shadows)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight.position.set(8, 18, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 40;
+            // Scale orthographic shadow bounds
+            const dShadow = 6;
+            dirLight.shadow.camera.left = -dShadow;
+            dirLight.shadow.camera.right = dShadow;
+            dirLight.shadow.camera.top = dShadow;
+            dirLight.shadow.camera.bottom = -dShadow;
+            scene.add(dirLight);
+
+            // Subtle helper point light for colorful glow from below
+            const bottomLight = new THREE.PointLight(0x6366f1, 1.2, 20);
+            bottomLight.position.set(0, -2, 0);
+            scene.add(bottomLight);
+        }
+
+        /* GENERATE AESTHETIC PALETTE (HSL) */
+        function getBlockColor(index) {
+            // Cycle through hues naturally
+            const hue = (index * 12) % 360;
+            return new THREE.Color(`hsl(${hue}, 85%, 60%)`);
+        }
+
+        /* GENERATE BLOCKS WITH CUSTOM MATERIALS & SHAPE */
+        function createBlockMesh(x, y, z, width, depth, colorHex) {
+            let geometry;
+            if (currentShape === 'cylinder') {
+                // Base cylinder geometry with diameter 1 (radius 0.5) to scale seamlessly
+                geometry = new THREE.CylinderGeometry(0.5, 0.5, BOX_HEIGHT, 32);
+            } else {
+                // Base box geometry with width/depth 1 to scale seamlessly
+                geometry = new THREE.BoxGeometry(1, BOX_HEIGHT, 1);
+            }
+            
+            // Premium matte/shiny hybrid look with Lambert material
+            const material = new THREE.MeshLambertMaterial({
+                color: colorHex,
+                flatShading: false
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.scale.set(width, 1, depth);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            return mesh;
+        }
+
+        /* RESET GAME / START GAME INITS */
+        function restartGame() {
+            // Reset numerical state
+            score = 0;
+            perfectStreak = 0;
+            blockIndex = 0;
+            cameraTargetY = 0;
+            cameraCurrentY = 0;
+            document.getElementById('scoreText').innerText = score;
+            
+            // Clean up 3D Scene
+            stack.forEach(block => scene.remove(block.mesh));
+            debris.forEach(deb => scene.remove(deb.mesh));
+            stack = [];
+            debris = [];
+
+            if (activeBlock.mesh) {
+                scene.remove(activeBlock.mesh);
+                activeBlock = {};
+            }
+
+            // 1. Create Base Static Foundation
+            const baseColor = getBlockColor(blockIndex);
+            const baseMesh = createBlockMesh(0, 0, 0, ORIGINAL_BOX_SIZE, ORIGINAL_BOX_SIZE, baseColor);
+            scene.add(baseMesh);
+            stack.push({
+                mesh: baseMesh,
+                width: ORIGINAL_BOX_SIZE,
+                depth: ORIGINAL_BOX_SIZE,
+                x: 0,
+                z: 0
+            });
+
+            // Adjust starting camera position immediately
+            camera.position.set(6, 6, 6);
+            camera.lookAt(0, 0, 0);
+
+            // 2. Spawn first moving block
+            spawnNextBlock();
+        }
+
+        /* SPAWN NEXT MOVING BLOCK OVER PREVIOUS */
+        function spawnNextBlock() {
+            blockIndex++;
+            const prevBlock = stack[stack.length - 1];
+            const nextY = prevBlock.mesh.position.y + BOX_HEIGHT;
+            
+            // Alternates movement axis (X or Z)
+            const axis = blockIndex % 2 === 0 ? 'z' : 'x';
+            
+            // Spawn distance offset
+            const startOffset = -5;
+            const x = axis === 'x' ? startOffset : prevBlock.mesh.position.x;
+            const z = axis === 'z' ? startOffset : prevBlock.mesh.position.z;
+
+            const color = getBlockColor(blockIndex);
+            const mesh = createBlockMesh(x, nextY, z, prevBlock.width, prevBlock.depth, color);
+            scene.add(mesh);
+
+            const cfg = SPEED_CONFIG[currentDifficulty];
+            activeBlock = {
+                mesh: mesh,
+                width: prevBlock.width,
+                depth: prevBlock.depth,
+                axis: axis,
+                direction: 1, // 1 is moving forward, -1 is backward
+                speed: cfg.base + (score * cfg.accel) // Speeds scale dynamically based on selected difficulty
+            };
+        }
+
+        /* SLICING MECHANIC LOGIC */
+        function handlePlacing() {
+            if (gameStatus !== 'PLAYING') return;
+
+            const prevBlock = stack[stack.length - 1];
+            const currentBlock = activeBlock;
+            const axis = currentBlock.axis;
+            
+            // Compute current deviation
+            const delta = currentBlock.mesh.position[axis] - prevBlock.mesh.position[axis];
+            const sizeOnAxis = axis === 'x' ? currentBlock.width : currentBlock.depth;
+            const maxAllowedDelta = sizeOnAxis;
+
+            // 1. COMPLETE MISS (GAME OVER)
+            if (Math.abs(delta) >= maxAllowedDelta) {
+                triggerGameOver();
+                return;
+            }
+
+            // 2. PERFECT FIT BONUS
+            const isPerfect = Math.abs(delta) < PERFECT_THRESHOLD;
+            let finalX = currentBlock.mesh.position.x;
+            let finalZ = currentBlock.mesh.position.z;
+            let finalWidth = currentBlock.width;
+            let finalDepth = currentBlock.depth;
+
+            if (isPerfect) {
+                // Snap block perfectly centered for gameplay satisfaction
+                finalX = prevBlock.mesh.position.x;
+                finalZ = prevBlock.mesh.position.z;
+                currentBlock.mesh.position.set(finalX, currentBlock.mesh.position.y, finalZ);
+                
+                perfectStreak++;
+                triggerPerfectAnimation();
+                sound.playStackSound(perfectStreak, true);
+            } else {
+                perfectStreak = 0; // Streak broken
+                sound.playStackSound(0, false);
+                
+                // Cut block algorithm
+                const overlap = sizeOnAxis - Math.abs(delta);
+                
+                // Spawn cut falling debris object
+                const debrisSize = Math.abs(delta);
+                const debrisColor = currentBlock.mesh.material.color;
+                
+                let debrisX = finalX;
+                let debrisZ = finalZ;
+                let debrisWidth = axis === 'x' ? debrisSize : currentBlock.width;
+                let debrisDepth = axis === 'z' ? debrisSize : currentBlock.depth;
+
+                if (axis === 'x') {
+                    finalWidth = overlap;
+                    // Compute overlap offset centers
+                    if (delta > 0) {
+                        finalX = prevBlock.mesh.position.x + (delta / 2);
+                        debrisX = finalX + (overlap / 2) + (debrisSize / 2);
+                    } else {
+                        finalX = prevBlock.mesh.position.x + (delta / 2);
+                        debrisX = finalX - (overlap / 2) - (debrisSize / 2);
+                    }
+                } else {
+                    finalDepth = overlap;
+                    if (delta > 0) {
+                        finalZ = prevBlock.mesh.position.z + (delta / 2);
+                        debrisZ = finalZ + (overlap / 2) + (debrisSize / 2);
+                    } else {
+                        finalZ = prevBlock.mesh.position.z + (delta / 2);
+                        debrisZ = finalZ - (overlap / 2) - (debrisSize / 2);
+                    }
+                }
+
+                // Adjust size of the placed mesh
+                currentBlock.mesh.scale.set(finalWidth, 1, finalDepth);
+                currentBlock.mesh.position.set(finalX, currentBlock.mesh.position.y, finalZ);
+
+                // Spawn Falling Piece (Debris)
+                spawnDebris(debrisX, currentBlock.mesh.position.y, debrisZ, debrisWidth, debrisDepth, debrisColor);
+            }
+
+            // Commit to stack
+            stack.push({
+                mesh: currentBlock.mesh,
+                width: finalWidth,
+                depth: finalDepth,
+                x: finalX,
+                z: finalZ
+            });
+
+            // Increment Score
+            score++;
+            document.getElementById('scoreText').innerText = score;
+
+            // Move camera upwards
+            cameraTargetY = score * BOX_HEIGHT;
+
+            // Spawn next block
+            spawnNextBlock();
+        }
+
+        /* SPAWN THE FALLING PIECE OUTSIDE SCREEN BOUNDS */
+        function spawnDebris(x, y, z, width, depth, color) {
+            const mesh = createBlockMesh(x, y, z, width, depth, color);
+            scene.add(mesh);
+            debris.push({
+                mesh: mesh,
+                velocity: -0.1, // gravitational starting velocity
+                scaleY: 1.0
+            });
+        }
+
+        /* PERFECT COMBO NOTIFICATION HUD TRIGGER */
+        function triggerPerfectAnimation() {
+            const comboEl = document.getElementById('comboText');
+            let comboLabel = 'Sempurna!';
+            if (perfectStreak > 1) comboLabel = `Perfect x${perfectStreak}!`;
+            
+            comboEl.innerText = comboLabel;
+            comboEl.className = "text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-pink-400 uppercase tracking-widest opacity-100 scale-110 transition-all duration-150 select-none drop-shadow-xl";
+            
+            setTimeout(() => {
+                comboEl.className = "text-4xl md:text-6xl font-black text-white uppercase tracking-widest opacity-0 scale-50 transition-all duration-300 select-none";
+            }, 700);
+        }
+
+        /* GAME OVER STATE HANDLING */
+        function triggerGameOver() {
+            gameStatus = 'GAMEOVER';
+            sound.playGameOver();
+
+            // Save Highscore in LocalStorage
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('stack_high_score', highScore);
+                document.getElementById('highScoreText').innerText = highScore;
+            }
+
+            // Set dynamic text values in UI Screen
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalHighScore').innerText = highScore;
+
+            // Animate and display Gameover Modal
+            const overScreen = document.getElementById('gameOverScreen');
+            overScreen.classList.remove('hidden');
+            setTimeout(() => {
+                overScreen.classList.remove('opacity-0', 'scale-95');
+            }, 10);
+            
+            // Drop current active block completely down
+            let fallMesh = activeBlock.mesh;
+            debris.push({
+                mesh: fallMesh,
+                velocity: -0.1,
+                scaleY: 1.0
+            });
+        }
+
+        /* DYNAMIC TICK UPDATE LOOP (RequestAnimationFrame) */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. If currently playing, animate moving blocks
+            if (gameStatus === 'PLAYING' && activeBlock.mesh) {
+                const axis = activeBlock.axis;
+                activeBlock.mesh.position[axis] += activeBlock.speed * activeBlock.direction;
+
+                // Boundary collision (Ping pong back and forth)
+                const limit = 4;
+                if (activeBlock.mesh.position[axis] > limit) {
+                    activeBlock.direction = -1;
+                } else if (activeBlock.mesh.position[axis] < -limit) {
+                    activeBlock.direction = 1;
+                }
+            }
+
+            // 2. Animate and update all falling chopped debris physics
+            for (let i = debris.length - 1; i >= 0; i--) {
+                const item = debris[i];
+                item.velocity -= 0.015; // Gravity pull force
+                item.mesh.position.y += item.velocity;
+                item.mesh.rotation.x += 0.03;
+                item.mesh.rotation.z += 0.02;
+
+                // Clean up mesh objects below view threshold to prevent memory leak
+                if (item.mesh.position.y < -15) {
+                    scene.remove(item.mesh);
+                    debris.splice(i, 1);
+                }
+            }
+
+            // 3. Smooth Camera Tracking Transition (Lerping)
+            if (cameraTargetY !== cameraCurrentY) {
+                cameraCurrentY += (cameraTargetY - cameraCurrentY) * 0.08;
+                // Move position of camera up alongside focus point target
+                camera.position.y = 6 + cameraCurrentY;
+                
+                // Focus slightly below target view point
+                camera.lookAt(0, cameraCurrentY - 1, 0);
+            }
+
+            // Render cycle
+            renderer.render(scene, camera);
+        }
+
+        /* WINDOW RESIZE HANDLER */
+        window.addEventListener('resize', onWindowResize, false);
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = 5;
+
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* PLAY BUTTONS EVENT CLICK TRIGGERS */
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        
+        // Shape Selection Handler
+        function setShape(shape) {
+            currentShape = shape;
+            
+            const btnBox = document.getElementById('shapeBoxBtn');
+            const btnCylinder = document.getElementById('shapeCylinderBtn');
+            
+            btnBox.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white";
+            btnCylinder.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white";
+            
+            if (shape === 'box') {
+                btnBox.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 shadow-md";
+            } else {
+                btnCylinder.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 shadow-md";
+            }
+            
+            sound.playTick(523.25, 0.15, 0.08); // play sound
+            restartGame(); // Redraw base box on background
+        }
+
+        document.getElementById('shapeBoxBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            setShape('box');
+        });
+
+        document.getElementById('shapeCylinderBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            setShape('cylinder');
+        });
+
+        // Difficulty Toggle Handler
+        function setDifficulty(level) {
+            currentDifficulty = level;
+            
+            const btnEasy = document.getElementById('easyBtn');
+            const btnMedium = document.getElementById('mediumBtn');
+            const btnHard = document.getElementById('hardBtn');
+            
+            // Reset to Inactive style
+            [btnEasy, btnMedium, btnHard].forEach(btn => {
+                btn.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-slate-400 hover:text-white";
+            });
+            
+            // Set Active styles and colors
+            if (level === 'easy') {
+                btnEasy.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 shadow-md";
+            } else if (level === 'medium') {
+                btnMedium.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 shadow-md";
+            } else if (level === 'hard') {
+                btnHard.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all text-rose-400 bg-rose-500/10 border border-rose-500/20 shadow-md";
+            }
+            
+            // Play nice synth responsive feedback sound
+            sound.playTick(440, 0.15, 0.08);
+        }
+
+        document.getElementById('easyBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            setDifficulty('easy');
+        });
+
+        document.getElementById('mediumBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            setDifficulty('medium');
+        });
+
+        document.getElementById('hardBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            setDifficulty('hard');
+        });
+
+        document.getElementById('startBtn').addEventListener('click', (e) => {
+            e.stopPropagation(); // Avoid triggering placement
+            sound.init();
+            startScreen.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                restartGame(); // Ensure fresh stack when playing
+                gameStatus = 'PLAYING';
+            }, 400);
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            gameOverScreen.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => {
+                gameOverScreen.classList.add('hidden');
+                restartGame();
+                gameStatus = 'PLAYING';
+            }, 400);
+        });
+
+        document.getElementById('homeBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.init();
+            gameOverScreen.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => {
+                gameOverScreen.classList.add('hidden');
+                
+                // Show Start Screen with nice animation
+                startScreen.classList.remove('hidden');
+                setTimeout(() => {
+                    startScreen.classList.remove('opacity-0', 'scale-95');
+                }, 10);
+                
+                gameStatus = 'START';
+                restartGame(); // Reset scene to static state
+            }, 400);
+        });
+
+        /* ACTION CONTROLS TRIGGER (Touch on Screen / Spacebar) */
+        function triggerAction() {
+            if (gameStatus === 'PLAYING') {
+                handlePlacing();
+            }
+        }
+
+        // Tap on screen gesture
+        window.addEventListener('pointerdown', (e) => {
+            // Check if user clicked UI buttons or popups, don't trigger game action if so
+            if (e.target.closest('button') || e.target.closest('#startScreen') || e.target.closest('#gameOverScreen')) {
+                return;
+            }
+            triggerAction();
+        });
+
+        // Spacebar key gesture
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                triggerAction();
+            }
+        });
+
+        /* INITIALIZE GLOBAL ONLOAD HOOK */
+        window.onload = function () {
+            init3D();
+            restartGame();
+            animate();
+        };
+    </script>
+</body>
+</html>
